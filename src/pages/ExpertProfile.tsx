@@ -402,7 +402,7 @@ const ExpertProfile = () => {
     <div className="min-h-screen bg-background scrollbar-hide">
       {/* Header */}
       <header className="bg-white border-b border-border">
-        <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6">
+        <div className="max-w-8xl mx-auto px-2 sm:px-4 lg:px-6">
           <div className="flex items-center justify-between h-16">
             {/* Left - Logo */}
             <button 
