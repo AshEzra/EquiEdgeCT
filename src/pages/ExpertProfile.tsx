@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useIsMobile } from "@/hooks/use-mobile";
 import ExpertSearch from "@/components/ExpertSearch";
 import emojiFlags from 'emoji-flags';
+import CometChatService from "@/services/cometchatService";
 
 // Type for expert data from Supabase
 interface Expert {
@@ -37,7 +38,7 @@ interface Expert {
   };
   videos?: Array<{ title: string; url: string }>;
   plans?: Array<{
-    id: number;
+    id: string; // Changed from number to string (UUID)
     name: string;
     description: string;
     details: string;
@@ -156,7 +157,7 @@ const ExpertProfile = () => {
           },
           videos: (videosData || []).map((v: any) => ({ url: v.url, title: '' })),
           plans: (plansData || []).map((p: any) => ({
-            id: parseInt(p.id),
+            id: p.id, // Keep as UUID string, don't convert to number
             name: p.title,
             description: p.description,
             price: p.price,
@@ -229,16 +230,13 @@ const ExpertProfile = () => {
     return '/placeholder.svg';
   };
 
-  const handleBookPlan = async (planId: number) => {
+  const handleBookPlan = async (planId: string) => {
     try {
       toast({
         title: "Booking Initiated",
         description: "Creating your session...",
       });
 
-      // In a real app, this would integrate with Stripe first
-      // For now, we'll simulate the booking process
-      
       // Get the plan details
       const plan = expert.plans?.find(p => p.id === planId);
       if (!plan) {
@@ -250,35 +248,67 @@ const ExpertProfile = () => {
         return;
       }
 
-      // Simulate payment success and create booking
-      setTimeout(async () => {
-        try {
-          // This would be the actual booking creation
-          // const sessionInfo = await SessionService.createBooking({
-          //   user_id: user?.id || '',
-          //   expert_id: expert.id,
-          //   service_id: planId.toString(),
-          //   price_paid: plan.price * 100 // Convert to cents
-          // });
+      // Get the user's profile ID (not auth user ID)
+      const { data: userProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
 
-          toast({
-            title: "Session Started!",
-            description: "Your session is now active. You can start chatting with the expert.",
-          });
-          
-          navigate('/messages');
-        } catch (error) {
-          toast({
-            title: "Booking Failed",
-            description: "There was an error creating your session. Please try again.",
-            variant: "destructive",
-          });
-        }
-      }, 1500);
-    } catch (error) {
+      if (profileError || !userProfile) {
+        console.error('Error fetching user profile:', profileError);
+        toast({
+          title: "Booking Failed",
+          description: "Unable to verify your profile. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create the actual booking in the database using profile ID
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          user_id: userProfile.id, // Use profile ID, not auth user ID
+          expert_id: expert.id,
+          service_id: planId,
+          price_paid: plan.price * 100, // Convert to cents
+          status: 'confirmed'
+        })
+        .select()
+        .single();
+
+      if (bookingError) {
+        console.error('Booking creation error:', bookingError);
+        toast({
+          title: "Booking Failed",
+          description: "There was an error creating your session. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Set CometChat booking history status
+      const cometChatService = CometChatService.getInstance();
+      cometChatService.setBookingHistory(true);
+
+      // Create CometChat user and login if this is their first booking
+      if (user) {
+        const userName = `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || user.email || 'User';
+        await cometChatService.createUserAndLogin(userProfile.id, userName, user.user_metadata?.avatar_url);
+      }
+
       toast({
-        title: "Error",
-        description: "Failed to initiate booking",
+        title: "Session Started!",
+        description: "Your session is now active. You can start chatting with the expert.",
+      });
+      
+      navigate('/messages');
+    } catch (error) {
+      console.error('Booking error:', error);
+      toast({
+        title: "Booking Failed",
+        description: "There was an error creating your session. Please try again.",
         variant: "destructive",
       });
     }
