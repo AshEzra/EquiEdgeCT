@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { toast } from "@/hooks/use-toast";
 import ExpertSearch from "@/components/ExpertSearch";
+import { useQuery } from '@tanstack/react-query';
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 // Type for expert data from Supabase
 interface Expert {
@@ -59,40 +61,71 @@ type ExpertSuggestionInsert = {
 const ExpertMarketplace = () => {
   const [selectedCategory, setSelectedCategory] = useState('All Experts');
   const [searchQuery, setSearchQuery] = useState('');
-  const [experts, setExperts] = useState<Expert[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [expertCategories, setExpertCategories] = useState<ExpertCategoryAssociation[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [suggestedExpertName, setSuggestedExpertName] = useState('');
   const [suggestedExpertReason, setSuggestedExpertReason] = useState('');
   const [isSubmittingSuggestion, setIsSubmittingSuggestion] = useState(false);
-  const [currentUserProfile, setCurrentUserProfile] = useState<{ is_expert: boolean } | null>(null);
   const navigate = useNavigate();
   const { user, session, signOut } = useAuth();
+  const { profile, isLoading: isProfileLoading, isError: isProfileError } = useUserProfile();
 
-  // Fetch current user's profile to check if they're an expert
-  useEffect(() => {
-    const fetchCurrentUserProfile = async () => {
-      if (!user) return;
-      
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_expert')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (!error && data) {
-          setCurrentUserProfile(data);
-        }
-      } catch (err) {
-        // console.error('Error fetching current user profile:', err);
-      }
-    };
-    
-    fetchCurrentUserProfile();
-  }, [user]);
+  // Fetch experts from Supabase
+  const {
+    data: experts = [],
+    isLoading: isExpertsLoading,
+    isError: isExpertsError,
+    error: expertsErrorObj,
+  } = useQuery({
+    queryKey: ['experts'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('is_expert', true)
+        .order('expert_rank', { ascending: true });
+      if (error) throw new Error(error.message);
+      return data as Expert[];
+    },
+  });
+
+  // Fetch categories from Supabase
+  const {
+    data: categories = [],
+    isLoading: isCategoriesLoading,
+    isError: isCategoriesError,
+  } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expert_categories')
+        .select('*')
+        .order('sort_order');
+      if (error) throw new Error(error.message);
+      return data as Category[];
+    },
+  });
+
+  // Fetch expert-category associations
+  const {
+    data: expertCategories = [],
+    isLoading: isAssociationsLoading,
+    isError: isAssociationsError,
+  } = useQuery({
+    queryKey: ['expertCategories'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('expert_category_associations')
+        .select('*');
+      if (error) throw new Error(error.message);
+      return data as ExpertCategoryAssociation[];
+    },
+  });
+
+  // Loading and error states
+  const loading = isExpertsLoading || isCategoriesLoading || isAssociationsLoading;
+  const error =
+    isExpertsError || isCategoriesError || isAssociationsError
+      ? (expertsErrorObj?.message || 'Failed to load experts. Please try again.')
+      : null;
 
   // Immediate connection test
   useEffect(() => {
@@ -109,114 +142,6 @@ const ExpertMarketplace = () => {
     };
     
     testConnection();
-  }, []);
-
-  // Fetch experts from Supabase
-  useEffect(() => {
-    const fetchExperts = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // console.log('Fetching experts from Supabase...');
-        
-        // Test connection first
-        const { data: testData, error: testError } = await supabase
-          .from('profiles')
-          .select('count')
-          .limit(1);
-        
-        // console.log('Connection test:', { testData, testError });
-        
-        // Check if user is authenticated using auth context
-        // console.log('Auth user from context:', user);
-        // console.log('Is authenticated:', !!user);
-        // console.log('Session:', session);
-        
-        // First, let's try to get all profiles to see if we can connect
-        const { data: allProfiles, error: allProfilesError } = await supabase
-          .from('profiles')
-          .select('*')
-          .limit(10);
-
-        // console.log('All profiles response:', { allProfiles, allProfilesError });
-
-        // Now try to get experts specifically
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('is_expert', true)
-          .order('expert_rank', { ascending: true });
-
-        // console.log('Experts response:', { data, error });
-
-        if (error) {
-          // console.error('Error fetching experts:', error);
-          setError('Failed to load experts. Please try again.');
-          return;
-        }
-
-        // console.log('Experts found:', data?.length || 0);
-        
-        // Log image URLs for debugging
-        if (data && data.length > 0) {
-          // console.log('Expert preview image URLs:', data.map(expert => ({
-          //   name: `${expert.first_name} ${expert.last_name}`,
-          //   imageUrl: expert.preview_image_url,
-          //   expert_rank: expert.expert_rank
-          // })));
-        }
-        
-        setExperts(data as Expert[] || []);
-      } catch (err) {
-        // console.error('Error fetching experts:', err);
-        setError('Failed to load experts. Please try again.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchExperts();
-  }, []);
-
-  // Fetch categories and associations from Supabase
-  useEffect(() => {
-    const fetchCategoriesAndAssociations = async () => {
-      try {
-        // console.log('Fetching categories and associations from Supabase...');
-        
-        // Fetch categories
-        const { data: categoryData, error: categoryError } = await supabase
-          .from('expert_categories')
-          .select('*')
-          .order('sort_order');
-
-        if (categoryError) {
-          // console.error('Error fetching categories:', categoryError);
-          return;
-        }
-
-        // console.log('Categories found:', categoryData);
-        setCategories(categoryData || []);
-
-        // Fetch expert-category associations
-        const { data: associationData, error: associationError } = await supabase
-          .from('expert_category_associations')
-          .select('*');
-
-        if (associationError) {
-          // console.error('Error fetching associations:', associationError);
-          return;
-        }
-
-        // console.log('Expert-category associations found:', associationData);
-        setExpertCategories(associationData || []);
-      } catch (err) {
-        // console.error('Error fetching categories and associations:', err);
-      }
-    };
-
-    fetchCategoriesAndAssociations();
   }, []);
 
   const filteredExperts = experts.filter(expert => {
@@ -355,7 +280,7 @@ const ExpertMarketplace = () => {
               onClick={() => navigate('/experts')}
               className="flex items-center space-x-1.5 focus:outline-none"
             >
-              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" />
+              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" loading="lazy" />
               <span className="text-[1.01rem] font-normal tracking-tight text-gray-900 select-none">
               <span className="font-semibold">Equi</span><span className="font-extrabold" style={{ marginLeft: '1px' }}>Edge</span>
               </span>
@@ -400,7 +325,7 @@ const ExpertMarketplace = () => {
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  {currentUserProfile?.is_expert && (
+                  {profile?.is_expert && (
                     <DropdownMenuItem onClick={() => navigate('/manage-profile')}>
                       <User className="mr-2 h-4 w-4" />
                       Manage Profile
@@ -503,6 +428,7 @@ const ExpertMarketplace = () => {
                       src={getExpertImage(expert)} 
                       alt={getExpertName(expert)}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         // console.log('Image failed to load for:', getExpertName(expert), 'URL:', target.src);
@@ -542,7 +468,7 @@ const ExpertMarketplace = () => {
               <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-6">
                 <div className="text-center mb-6">
                   <div className="w-14 h-14 flex items-center justify-center mx-auto mb-1">
-                    <img src={equiLogo} alt="EquiEdge Logo" className="w-12 h-12 object-contain" />
+                    <img src={equiLogo} alt="EquiEdge Logo" className="w-12 h-12 object-contain" loading="lazy" />
                   </div>
                   <h3 className="text-lg font-bold text-gray-900 mb-1">Suggest an Expert</h3>
                   <p className="text-gray-600 text-xs">Help us bring the best experts to our platform</p>

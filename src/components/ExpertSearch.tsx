@@ -196,6 +196,7 @@ const ExpertSearch = ({
                         src={getExpertImage(expert)}
                         alt={getExpertName(expert)}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = '/api/placeholder/40/40';
                         }}

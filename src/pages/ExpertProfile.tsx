@@ -14,6 +14,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import ExpertSearch from "@/components/ExpertSearch";
 import emojiFlags from 'emoji-flags';
 import CometChatService from "@/services/cometchatService";
+import { useUserProfile } from "@/contexts/UserProfileContext";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 // Type for expert data from Supabase
 interface Expert {
@@ -60,31 +62,31 @@ const ExpertProfile = () => {
   const [expert, setExpert] = useState<Expert | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentUserProfile, setCurrentUserProfile] = useState<{ is_expert: boolean } | null>(null);
+  const { profile, isLoading: isProfileLoading, isError: isProfileError } = useUserProfile();
   const isMobile = useIsMobile();
 
   // Fetch current user's profile to check if they're an expert
-  useEffect(() => {
-    const fetchCurrentUserProfile = async () => {
-      if (!user) return;
+  // useEffect(() => {
+  //   const fetchCurrentUserProfile = async () => {
+  //     if (!user) return;
       
-      try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('is_expert')
-          .eq('user_id', user.id)
-          .single();
+  //     try {
+  //       const { data, error } = await supabase
+  //         .from('profiles')
+  //         .select('is_expert')
+  //         .eq('user_id', user.id)
+  //         .single();
         
-        if (!error && data) {
-          setCurrentUserProfile(data);
-        }
-      } catch (err) {
-        console.error('Error fetching current user profile:', err);
-      }
-    };
+  //       if (!error && data) {
+  //         setCurrentUserProfile(data);
+  //       }
+  //     } catch (err) {
+  //       console.error('Error fetching current user profile:', err);
+  //     }
+  //   };
     
-    fetchCurrentUserProfile();
-  }, [user]);
+  //   fetchCurrentUserProfile();
+  // }, [user]);
 
   // Map tab keys to canonical values for switching between mobile/desktop
   const TAB_KEYS = ['about', 'media', 'plans', 'reviews'];
@@ -110,50 +112,54 @@ const ExpertProfile = () => {
       try {
         setLoading(true);
         setError(null);
-        // Fetch expert profile
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', id)
-          .eq('is_expert', true)
-          .single();
-        if (error) {
-          console.error('Error fetching expert:', error);
+        // Fetch expert profile, videos, and plans in parallel
+        const [
+          { data: profileData, error: profileError },
+          { data: videosData, error: videosError },
+          { data: plansData, error: plansError }
+        ] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', id)
+            .eq('is_expert', true)
+            .single(),
+          supabase
+            .from('expert_videos')
+            .select('url, created_at')
+            .eq('expert_id', id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('expert_services')
+            .select('id, title, description, price, availability_slots')
+            .eq('expert_id', id)
+            .order('price', { ascending: true })
+        ]);
+        if (profileError) {
+          console.error('Error fetching expert:', profileError);
           setError('Expert not found');
           setLoading(false);
           return;
         }
-        if (!data) {
+        if (!profileData) {
           setError('Expert not found');
           setLoading(false);
           return;
         }
-        // Fetch expert videos
-        const { data: videosData, error: videosError } = await (supabase as any)
-          .from('expert_videos')
-          .select('url, created_at')
-          .eq('expert_id', id)
-          .order('created_at', { ascending: false });
         if (videosError) {
           console.error('Error fetching expert videos:', videosError);
         }
-        // Fetch expert plans
-        const { data: plansData, error: plansError } = await supabase
-          .from('expert_services')
-          .select('id, title, description, price, availability_slots')
-          .eq('expert_id', id)
-          .order('price', { ascending: true });
         if (plansError) {
           console.error('Error fetching expert plans:', plansError);
         }
         // Add default data for missing fields
         const expertData: Expert = {
-          ...data,
-          about: (data as any).profile_bio || `I am ${data.first_name} ${data.last_name}, an expert in equestrian sports.`,
+          ...profileData,
+          about: (profileData as any).profile_bio || `I am ${profileData.first_name} ${profileData.last_name}, an expert in equestrian sports.`,
           social: {
-            instagram: data.instagram_url || null,
-            facebook: data.facebook_url || null,
-            linkedin: data.linkedin_url || null
+            instagram: profileData.instagram_url || null,
+            facebook: profileData.facebook_url || null,
+            linkedin: profileData.linkedin_url || null
           },
           videos: (videosData || []).map((v: any) => ({ url: v.url, title: '' })),
           plans: (plansData || []).map((p: any) => ({
@@ -211,23 +217,12 @@ const ExpertProfile = () => {
   // Helper function to get expert's display image
   const getExpertImage = (expert: Expert) => {
     const profileImageUrl = expert.profile_image_url;
-    
-    if (!profileImageUrl) {
-      return '/placeholder.svg';
-    }
-    
-    // If it's already a full URL, use it
-    if (profileImageUrl.startsWith('http')) {
-      return profileImageUrl;
-    }
-    
-    // If it's a relative path, assume it's from Supabase storage
-    if (profileImageUrl.startsWith('/')) {
-      return profileImageUrl;
-    }
-    
-    // Default fallback
-    return '/placeholder.svg';
+    if (!profileImageUrl) return null;
+    // If it's a known placeholder, treat as missing
+    if (profileImageUrl.includes('placeholder')) return null;
+    if (profileImageUrl.startsWith('http')) return profileImageUrl;
+    if (profileImageUrl.startsWith('/')) return profileImageUrl;
+    return null;
   };
 
   const handleBookPlan = async (planId: string) => {
@@ -439,7 +434,7 @@ const ExpertProfile = () => {
               onClick={() => navigate('/experts')}
               className="flex items-center space-x-1.5 focus:outline-none"
             >
-              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" />
+              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" loading="lazy" />
               <span className="text-[1.01rem] font-normal tracking-tight text-gray-900 select-none">
                 <span className="font-semibold">Equi</span><span className="font-extrabold" style={{ marginLeft: '1px' }}>Edge</span>
               </span>
@@ -480,7 +475,7 @@ const ExpertProfile = () => {
                   </div>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
-                  {currentUserProfile?.is_expert && (
+                  {profile?.is_expert && (
                     <DropdownMenuItem onClick={() => navigate('/manage-profile')}>
                       <User className="mr-2 h-4 w-4" />
                       Manage Profile
@@ -507,18 +502,20 @@ const ExpertProfile = () => {
           <div className="flex flex-col items-center mb-10">
             {/* Profile image top and center, larger and less top padding */}
             <div className="w-36 h-36 bg-muted rounded-full flex items-center justify-center overflow-hidden mb-5 mt-2">
-              {getExpertImage(expert) ? (
-                <img
-                  src={getExpertImage(expert)}
-                  alt={getExpertName(expert)}
-                  className="w-full h-full object-cover rounded-full"
-                  onError={e => { (e.target as HTMLImageElement).src = '/api/placeholder/400/400'; }}
-                />
-              ) : (
-                <span className="text-2xl font-bold">
+              <Avatar className="w-36 h-36">
+                {getExpertImage(expert) && (
+                  <AvatarImage
+                    src={getExpertImage(expert)}
+                    alt={getExpertName(expert)}
+                    className="w-full h-full object-cover rounded-full"
+                    loading="lazy"
+                    onError={e => { (e.target as HTMLImageElement).src = ''; }}
+                  />
+                )}
+                <AvatarFallback className="text-2xl font-bold">
                   {getExpertName(expert).split(' ').map(n => n[0]).join('')}
-                </span>
-              )}
+                </AvatarFallback>
+              </Avatar>
             </div>
             {/* Flag and location left aligned */}
             <div className="w-full flex items-center gap-2 mb-1">
@@ -571,18 +568,20 @@ const ExpertProfile = () => {
           // ... existing desktop layout ...
           <div className="flex items-start gap-6 mb-20">
             <div className="w-28 h-28 bg-muted rounded-full flex items-center justify-center overflow-hidden">
-              {getExpertImage(expert) ? (
-                <img
-                  src={getExpertImage(expert)}
-                  alt={getExpertName(expert)}
-                  className="w-full h-full object-cover rounded-full"
-                  onError={e => { (e.target as HTMLImageElement).src = '/api/placeholder/400/400'; }}
-                />
-              ) : (
-                <span className="text-2xl font-bold">
+              <Avatar className="w-28 h-28">
+                {getExpertImage(expert) && (
+                  <AvatarImage
+                    src={getExpertImage(expert)}
+                    alt={getExpertName(expert)}
+                    className="w-full h-full object-cover rounded-full"
+                    loading="lazy"
+                    onError={e => { (e.target as HTMLImageElement).src = ''; }}
+                  />
+                )}
+                <AvatarFallback className="text-2xl font-bold">
                   {getExpertName(expert).split(' ').map(n => n[0]).join('')}
-                </span>
-              )}
+                </AvatarFallback>
+              </Avatar>
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-2">

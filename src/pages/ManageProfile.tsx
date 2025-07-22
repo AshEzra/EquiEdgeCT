@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import ExpertSearch from "@/components/ExpertSearch";
 import ReactSelect from 'react-select';
 import emojiFlags from 'emoji-flags';
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface ProfileData {
   id: string;
@@ -57,9 +58,7 @@ const ManageProfile = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const isMobile = useIsMobile();
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const { profile, isLoading, isError } = useUserProfile();
   const [services, setServices] = useState<ExpertService[]>([]);
   const [videos, setVideos] = useState<ExpertVideo[]>([]);
   const [editingService, setEditingService] = useState<ExpertService | null>(null);
@@ -90,98 +89,78 @@ const ManageProfile = () => {
     availability_slots: "",
   });
 
-  // Service type options
-  const serviceTypeOptions = [
-    { value: "30_min", label: "1:1 Coaching (30 Minutes)", title: "1:1 Coaching (30 Minutes)" },
-    { value: "1_hour", label: "1:1 Coaching (1 Hour)", title: "1:1 Coaching (1 Hour)" },
-    { value: "1_week", label: "1:1 Coaching (1 Week)", title: "1:1 Coaching (1 Week)" },
-    { value: "1_month", label: "1:1 Coaching (1 Month)", title: "1:1 Coaching (1 Month)" },
-  ];
-
-  // Prepare country options for react-select
-  const countryOptions = emojiFlags.data.map((country) => ({
-    value: country.code,
-    label: `${country.emoji} ${country.name}`,
-  }));
-
-  // Fetch profile data
+  // Initialize formData when profile loads
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
-      
-      try {
-        setLoading(true);
-        const { data: profileData, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+    if (profile) {
+      setFormData({
+        first_name: profile.first_name || "",
+        last_name: profile.last_name || "",
+        bio: profile.bio || "",
+        location: profile.location || "",
+        instagram_url: profile.instagram_url || "",
+        facebook_url: profile.facebook_url || "",
+        linkedin_url: profile.linkedin_url || "",
+        profile_bio: profile.profile_bio || "",
+        home_country: profile.home_country || "",
+      });
+    }
+  }, [profile]);
 
-        if (error) {
-          console.error('Error fetching profile:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load profile data",
-            variant: "destructive",
-          });
-          return;
-        }
-
-        setProfile(profileData);
-        setFormData({
-          first_name: profileData.first_name || "",
-          last_name: profileData.last_name || "",
-          bio: profileData.bio || "",
-          location: profileData.location || "",
-          instagram_url: profileData.instagram_url || "",
-          facebook_url: profileData.facebook_url || "",
-          linkedin_url: profileData.linkedin_url || "",
-          profile_bio: profileData.profile_bio || "",
-          home_country: profileData.home_country || "",
+  // Fetch expert services and videos when profile is loaded and is_expert
+  useEffect(() => {
+    if (profile && profile.is_expert) {
+      // Fetch expert services
+      supabase
+        .from('expert_services')
+        .select('*')
+        .eq('expert_id', profile.id)
+        .order('created_at', { ascending: false })
+        .then(({ data: servicesData, error: servicesError }) => {
+          if (!servicesError) setServices(servicesData || []);
         });
-
-        // Fetch expert services and videos
-        if (profileData.is_expert) {
-          // Fetch expert services
-          const { data: servicesData, error: servicesError } = await supabase
-            .from('expert_services')
-            .select('*')
-            .eq('expert_id', profileData.id)
-            .order('created_at', { ascending: false });
-
-          if (servicesError) {
-            console.error('Error fetching services:', servicesError);
-          } else {
-            setServices(servicesData || []);
-          }
-
-          // Fetch expert videos
-          const { data: videosData, error: videosError } = await supabase
-            .from('expert_videos')
-            .select('*')
-            .eq('expert_id', profileData.id)
-            .order('created_at', { ascending: false });
-
-          if (videosError) {
-            console.error('Error fetching videos:', videosError);
-          } else {
-            setVideos(videosData || []);
-          }
-        }
-      } catch (err) {
-        console.error('Error:', err);
-        toast({
-          title: "Error",
-          description: "Failed to load profile data",
-          variant: "destructive",
+      // Fetch expert videos
+      supabase
+        .from('expert_videos')
+        .select('*')
+        .eq('expert_id', profile.id)
+        .order('created_at', { ascending: false })
+        .then(({ data: videosData, error: videosError }) => {
+          if (!videosError) setVideos(videosData || []);
         });
-      } finally {
-        setLoading(false);
-      }
-    };
+    }
+  }, [profile]);
 
-    fetchProfile();
-  }, [user]);
+  // Loading and error guards
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">Error loading profile</h1>
+          <p className="text-muted-foreground mb-4">There was an error loading your profile. Please try again later.</p>
+        </div>
+      </div>
+    );
+  }
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-foreground mb-4">No profile found</h1>
+          <p className="text-muted-foreground mb-4">We could not find your profile. Please contact support.</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -195,7 +174,6 @@ const ManageProfile = () => {
     if (!profile) return;
 
     try {
-      setSaving(true);
       const { error } = await supabase
         .from('profiles')
         .update({
@@ -233,8 +211,6 @@ const ManageProfile = () => {
         description: "Failed to save profile changes",
         variant: "destructive",
       });
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -480,16 +456,19 @@ const ManageProfile = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
+  // Service type options
+  const serviceTypeOptions = [
+    { value: "30_min", label: "1:1 Coaching (30 Minutes)", title: "1:1 Coaching (30 Minutes)" },
+    { value: "1_hour", label: "1:1 Coaching (1 Hour)", title: "1:1 Coaching (1 Hour)" },
+    { value: "1_week", label: "1:1 Coaching (1 Week)", title: "1:1 Coaching (1 Week)" },
+    { value: "1_month", label: "1:1 Coaching (1 Month)", title: "1:1 Coaching (1 Month)" },
+  ];
+
+  // Prepare country options for react-select
+  const countryOptions = emojiFlags.data.map((country) => ({
+    value: country.code,
+    label: `${country.emoji} ${country.name}`,
+  }));
 
   if (!profile?.is_expert) {
     return (
@@ -516,7 +495,7 @@ const ManageProfile = () => {
               onClick={() => navigate('/experts')}
               className="flex items-center space-x-1.5 focus:outline-none"
             >
-              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" />
+              <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" loading="lazy" />
               <span className="text-[1.01rem] font-normal tracking-tight text-gray-900 select-none">
                 <span className="font-semibold">Equi</span><span className="font-extrabold" style={{ marginLeft: '1px' }}>Edge</span>
               </span>
@@ -1022,11 +1001,11 @@ const ManageProfile = () => {
           <div className="flex justify-center pt-8">
             <Button
               onClick={handleSaveProfile}
-              disabled={saving}
+              disabled={false} // Removed saving state as it's not managed by useState anymore
               className="bg-gradient-to-r from-primary to-primary-hover hover:from-primary-hover hover:to-primary text-white px-8 py-3 text-lg font-medium shadow-xl hover:shadow-2xl transition-all duration-200 transform hover:scale-105"
             >
               <Save className="h-5 w-5 mr-2" />
-              {saving ? 'Saving...' : 'Save'}
+              Save
             </Button>
           </div>
         </div>

@@ -11,6 +11,7 @@ import {
 import ExpertSearch from "@/components/ExpertSearch";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 interface TopBarProps {
   showSearchBar?: boolean;
@@ -20,24 +21,7 @@ interface TopBarProps {
 const TopBar: React.FC<TopBarProps> = ({ showSearchBar = true, onMessageClick }) => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const [isExpert, setIsExpert] = useState(false);
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('is_expert')
-        .eq('user_id', user.id)
-        .single();
-      if (!error && data && data.is_expert) {
-        setIsExpert(true);
-      } else {
-        setIsExpert(false);
-      }
-    };
-    fetchProfile();
-  }, [user]);
+  const { profile } = useUserProfile();
 
   return (
     <header className="bg-white border-b border-border">
@@ -93,7 +77,7 @@ const TopBar: React.FC<TopBarProps> = ({ showSearchBar = true, onMessageClick })
                 </div>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                {isExpert && (
+                {profile?.is_expert && (
                   <DropdownMenuItem onClick={() => navigate('/manage-profile')}>
                     <User className="mr-2 h-4 w-4" />
                     Manage Profile

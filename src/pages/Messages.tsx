@@ -5,10 +5,12 @@ import { useState, useEffect } from "react";
 import TopBar from "@/components/TopBar";
 import CometChatService from "@/services/cometchatService";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserProfile } from "@/contexts/UserProfileContext";
 
 const Messages = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { profile, isLoading, isError } = useUserProfile();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasBookingHistory, setHasBookingHistory] = useState(false);
@@ -24,22 +26,22 @@ const Messages = () => {
         setError(null);
 
         // Get the user's profile ID (not auth user ID)
-        const { data: userProfile, error: profileError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('user_id', user.id)
-          .single();
+        // const { data: userProfile, error: profileError } = await supabase
+        //   .from('profiles')
+        //   .select('id')
+        //   .eq('user_id', user.id)
+        //   .single();
 
-        if (profileError || !userProfile) {
-          console.error('Error fetching user profile:', profileError);
-          setError("Unable to verify your profile. Please try again.");
-          return;
-        }
+        // if (profileError || !userProfile) {
+        //   console.error('Error fetching user profile:', profileError);
+        //   setError("Unable to verify your profile. Please try again.");
+        //   return;
+        // }
 
         const cometChatService = CometChatService.getInstance();
         
         // Check if user has any booking history using profile ID
-        const hasHistory = await cometChatService.checkBookingHistory(userProfile.id);
+        const hasHistory = await cometChatService.checkBookingHistory(profile?.id);
         setHasBookingHistory(hasHistory);
 
         if (hasHistory) {
@@ -48,12 +50,12 @@ const Messages = () => {
           
           // Login user to CometChat using profile ID
           const userName = `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || user.email || 'User';
-          await cometChatService.loginUser(userProfile.id, userName, user.user_metadata?.avatar_url);
+          await cometChatService.loginUser(profile?.id, userName, user.user_metadata?.avatar_url);
           
           setIsCometChatReady(true);
-          console.log("CometChat ready for user with booking history:", userProfile.id);
+          console.log("CometChat ready for user with booking history:", profile?.id);
         } else {
-          console.log("No booking history found for user:", userProfile.id);
+          console.log("No booking history found for user:", profile?.id);
         }
       } catch (error) {
         console.error("Failed to check booking history or initialize CometChat:", error);
@@ -66,7 +68,7 @@ const Messages = () => {
     if (user) {
       checkBookingHistoryAndInitialize();
     }
-  }, [user]);
+  }, [user, profile?.id]);
 
   if (loading) {
     return (

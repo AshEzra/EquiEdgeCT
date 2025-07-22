@@ -32,7 +32,7 @@ const Landing = () => {
       <header className="w-full flex items-center justify-between px-5 py-3 bg-white">
         {/* Logo */}
         <div className="flex items-center space-x-1.5">
-          <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" />
+          <img src={equiLogo} alt="EquiEdge Logo" className="w-7 h-7 object-contain" loading="lazy" />
           <span className="text-[1.01rem] font-normal tracking-tight text-gray-900 select-none">
             <span className="font-semibold">Equi</span><span className="font-extrabold ml-0.45">Edge</span>
           </span>
@@ -92,6 +92,7 @@ const Landing = () => {
               position: isMobile ? 'relative' : undefined,
               transform: isMobile ? 'translateX(-50%)' : undefined,
             }}
+            loading="lazy"
           />
           {isMobile ? (
             <div

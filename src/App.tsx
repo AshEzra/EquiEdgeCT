@@ -13,44 +13,47 @@ import Messages from "./pages/Messages";
 import ManageProfile from "./pages/ManageProfile";
 import ProtectedRoute from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
+import { UserProfileProvider } from "./contexts/UserProfileContext";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/waitlist" element={<Waitlist />} />
-            <Route path="/experts" element={
-              <ProtectedRoute>
-                <ExpertMarketplace />
-              </ProtectedRoute>
-            } />
-            <Route path="/expert/:id" element={
-              <ProtectedRoute>
-                <ExpertProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="/messages" element={
-              <ProtectedRoute>
-                <Messages />
-              </ProtectedRoute>
-            } />
-            <Route path="/manage-profile" element={
-              <ProtectedRoute>
-                <ManageProfile />
-              </ProtectedRoute>
-            } />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <UserProfileProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/waitlist" element={<Waitlist />} />
+              <Route path="/experts" element={
+                <ProtectedRoute>
+                  <ExpertMarketplace />
+                </ProtectedRoute>
+              } />
+              <Route path="/expert/:id" element={
+                <ProtectedRoute>
+                  <ExpertProfile />
+                </ProtectedRoute>
+              } />
+              <Route path="/messages" element={
+                <ProtectedRoute>
+                  <Messages />
+                </ProtectedRoute>
+              } />
+              <Route path="/manage-profile" element={
+                <ProtectedRoute>
+                  <ManageProfile />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </UserProfileProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

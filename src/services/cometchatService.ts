@@ -145,7 +145,7 @@ class CometChatService {
       const { data, error } = await supabase
         .from('bookings')
         .select('id')
-        .eq('user_id', profileId) // This is actually the profile ID in the bookings table
+        .or(`user_id.eq.${profileId},expert_id.eq.${profileId}`)
         .limit(1);
 
       if (error) {
