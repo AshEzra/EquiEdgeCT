@@ -23,7 +23,6 @@ interface Expert {
   first_name: string | null;
   last_name: string | null;
   bio: string | null;
-  specialties: string[] | null;
   starting_price: number | null;
   location: string | null;
   profile_image_url: string | null;
@@ -634,9 +633,9 @@ const ExpertProfile = () => {
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
-                  {expert.specialties?.map((specialty) => (
-                    <Badge key={specialty} variant="secondary">
-                      {specialty}
+                  {expert.plans?.map((plan) => (
+                    <Badge key={plan.id} variant="secondary">
+                      {plan.name}
                     </Badge>
                   ))}
                 </div>

@@ -400,7 +400,6 @@ export type Database = {
           preview_image_url: string | null
           profile_bio: string | null
           profile_image_url: string | null
-          specialties: string[] | null
           starting_price: number | null
           updated_at: string
           user_id: string
@@ -422,7 +421,6 @@ export type Database = {
           preview_image_url?: string | null
           profile_bio?: string | null
           profile_image_url?: string | null
-          specialties?: string[] | null
           starting_price?: number | null
           updated_at?: string
           user_id: string
@@ -444,7 +442,6 @@ export type Database = {
           preview_image_url?: string | null
           profile_bio?: string | null
           profile_image_url?: string | null
-          specialties?: string[] | null
           starting_price?: number | null
           updated_at?: string
           user_id?: string
