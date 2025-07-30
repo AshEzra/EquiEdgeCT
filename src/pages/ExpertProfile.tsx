@@ -242,10 +242,10 @@ const ExpertProfile = () => {
         return;
       }
 
-      // Get the user's profile ID (not auth user ID)
+      // Get the user's profile with name (not auth user ID)
       const { data: userProfile, error: profileError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, first_name, last_name, profile_image_url')
         .eq('user_id', user?.id)
         .single();
 
@@ -288,8 +288,11 @@ const ExpertProfile = () => {
 
       // Create CometChat user and login if this is their first booking
       if (user) {
-        const userName = `${user.user_metadata?.first_name || ''} ${user.user_metadata?.last_name || ''}`.trim() || user.email || 'User';
-        await cometChatService.createUserAndLogin(userProfile.id, userName, user.user_metadata?.avatar_url);
+        console.log("User profile:", userProfile);
+        console.log("User email:", user.email);
+        const userName = `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim() || user.email || 'User';
+        console.log("Constructed userName:", userName);
+        await cometChatService.createUserAndLogin(userProfile.id, userName, userProfile.profile_image_url);
       }
 
       toast({

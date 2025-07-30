@@ -16,6 +16,7 @@ class CometChatService {
   private hasBookingHistory = false;
   private CometChatUIKit: any = null;
   private UIKitSettingsBuilder: any = null;
+  private CometChat: any = null;
 
   private constructor() {}
 
@@ -33,8 +34,10 @@ class CometChatService {
     if (!this.CometChatUIKit) {
       try {
         const { CometChatUIKit, UIKitSettingsBuilder } = await import("@cometchat/chat-uikit-react");
+        const { CometChat } = await import("@cometchat/chat-sdk-javascript");
         this.CometChatUIKit = CometChatUIKit;
         this.UIKitSettingsBuilder = UIKitSettingsBuilder;
+        this.CometChat = CometChat;
       } catch (error) {
         console.error("Failed to load CometChat SDK:", error);
         throw error;
@@ -80,8 +83,28 @@ class CometChatService {
         await this.initialize();
       }
 
-      // Login to CometChat using the UIKit
-      await this.CometChatUIKit.login(uid);
+      // Create user in CometChat first using core SDK
+      try {
+        const user = new this.CometChat.User(uid);
+        user.setName(name);
+        if (avatar) {
+          user.setAvatar(avatar);
+        }
+        
+        await this.CometChat.createUser(user, COMETCHAT_CONSTANTS.AUTH_KEY);
+        console.log("CometChat user created successfully:", { uid, name, avatar });
+      } catch (createError: any) {
+        // If user already exists, that's fine - continue to login
+        if (createError.code === 'ERR_UID_ALREADY_TAKEN') {
+          console.log("User already exists in CometChat, proceeding to login:", uid);
+        } else {
+          console.error("Error creating CometChat user:", createError);
+          throw createError;
+        }
+      }
+
+      // Login to CometChat
+      await this.CometChatUIKit.login(uid, COMETCHAT_CONSTANTS.AUTH_KEY);
       this.isLoggedIn = true;
       this.hasBookingHistory = true;
       console.log("CometChat user created and logged in:", uid);
@@ -105,8 +128,9 @@ class CometChatService {
     }
 
     try {
-      // Login to CometChat using the UIKit
-      await this.CometChatUIKit.login(uid);
+      // UI Kit should automatically create user if they don't exist
+      console.log("Attempting to login/create user:", { uid, name, avatar });
+      await this.CometChatUIKit.login(uid, COMETCHAT_CONSTANTS.AUTH_KEY);
       this.isLoggedIn = true;
       console.log("CometChat login successful:", uid);
     } catch (error) {
@@ -164,7 +188,7 @@ class CometChatService {
       
       const { data, error } = await supabase
         .from('bookings')
-        .select('id')
+        .select('id, user_id, expert_id')
         .or(`user_id.eq.${profileId},expert_id.eq.${profileId}`)
         .limit(1);
 
@@ -175,6 +199,9 @@ class CometChatService {
 
       const hasHistory = data && data.length > 0;
       console.log("Booking history found:", hasHistory, "for profile:", profileId);
+      if (hasHistory && data) {
+        console.log("Booking details:", data[0]);
+      }
       
       // Update the stored state
       this.hasBookingHistory = hasHistory;
