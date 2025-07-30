@@ -1,4 +1,3 @@
-import { CometChatUIKit, UIKitSettingsBuilder } from "@cometchat/chat-uikit-react";
 import { supabase } from "@/integrations/supabase/client";
 
 /**
@@ -15,6 +14,8 @@ class CometChatService {
   private isInitialized = false;
   private isLoggedIn = false;
   private hasBookingHistory = false;
+  private CometChatUIKit: any = null;
+  private UIKitSettingsBuilder: any = null;
 
   private constructor() {}
 
@@ -26,6 +27,22 @@ class CometChatService {
   }
 
   /**
+   * Dynamically import CometChat SDK for SSR compatibility
+   */
+  private async loadCometChatSDK() {
+    if (!this.CometChatUIKit) {
+      try {
+        const { CometChatUIKit, UIKitSettingsBuilder } = await import("@cometchat/chat-uikit-react");
+        this.CometChatUIKit = CometChatUIKit;
+        this.UIKitSettingsBuilder = UIKitSettingsBuilder;
+      } catch (error) {
+        console.error("Failed to load CometChat SDK:", error);
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Initialize CometChat when user has any booking history
    */
   async initialize(): Promise<void> {
@@ -34,14 +51,17 @@ class CometChatService {
     }
 
     try {
-      const UIKitSettings = new UIKitSettingsBuilder()
+      // Load CometChat SDK dynamically
+      await this.loadCometChatSDK();
+
+      const UIKitSettings = new this.UIKitSettingsBuilder()
         .setAppId(COMETCHAT_CONSTANTS.APP_ID)
         .setRegion(COMETCHAT_CONSTANTS.REGION)
         .setAuthKey(COMETCHAT_CONSTANTS.AUTH_KEY)
         .subscribePresenceForAllUsers()
         .build();
 
-      await CometChatUIKit.init(UIKitSettings);
+      await this.CometChatUIKit.init(UIKitSettings);
       this.isInitialized = true;
       console.log("CometChat UI Kit initialized successfully.");
     } catch (error) {
@@ -61,7 +81,7 @@ class CometChatService {
       }
 
       // Login to CometChat using the UIKit
-      await CometChatUIKit.login(uid);
+      await this.CometChatUIKit.login(uid);
       this.isLoggedIn = true;
       this.hasBookingHistory = true;
       console.log("CometChat user created and logged in:", uid);
@@ -86,7 +106,7 @@ class CometChatService {
 
     try {
       // Login to CometChat using the UIKit
-      await CometChatUIKit.login(uid);
+      await this.CometChatUIKit.login(uid);
       this.isLoggedIn = true;
       console.log("CometChat login successful:", uid);
     } catch (error) {
@@ -98,13 +118,13 @@ class CometChatService {
   /**
    * Logout user from CometChat
    */
-  async logoutUser(): Promise<void> {
-    if (!this.isLoggedIn) {
+  async logout(): Promise<void> {
+    if (!this.isLoggedIn || !this.CometChatUIKit) {
       return;
     }
 
     try {
-      await CometChatUIKit.logout();
+      await this.CometChatUIKit.logout();
       this.isLoggedIn = false;
       console.log("CometChat logout successful");
     } catch (error) {
