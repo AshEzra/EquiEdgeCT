@@ -34,7 +34,7 @@ const CometChatWrapper = ({
       }
 
       try {
-        const cometChatService = CometChatService.getInstance();
+        const cometChatService = new CometChatService();
         
         // Check if user has booking history
         const hasHistory = await cometChatService.checkBookingHistory(userId);

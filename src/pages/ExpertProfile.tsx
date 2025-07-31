@@ -282,17 +282,28 @@ const ExpertProfile = () => {
         return;
       }
 
-      // Set CometChat booking history status
-      const cometChatService = CometChatService.getInstance();
-      cometChatService.setBookingHistory(true);
-
       // Create CometChat user and login if this is their first booking
       if (user) {
         console.log("User profile:", userProfile);
         console.log("User email:", user.email);
         const userName = `${userProfile.first_name || ''} ${userProfile.last_name || ''}`.trim() || user.email || 'User';
         console.log("Constructed userName:", userName);
+        
+        const cometChatService = new CometChatService();
         await cometChatService.createUserAndLogin(userProfile.id, userName, userProfile.profile_image_url);
+        
+        // Set booking history status after user is logged in
+        cometChatService.setBookingHistory(true);
+        
+        // Create the conversation between user and expert
+        await cometChatService.createConversation(userProfile.id, expert.id, booking.id);
+        console.log("✅ Conversation created between user and expert");
+        
+        // Send welcome message to start the conversation
+        const expertName = `${expert.first_name || ''} ${expert.last_name || ''}`.trim() || 'Expert';
+        const welcomeMessage = `Hi ${expertName}! I just booked a session with you. Looking forward to our conversation!`;
+        await cometChatService.sendDirectMessage(expert.id, welcomeMessage);
+        console.log("✅ Welcome message sent to expert:", expert.id);
       }
 
       toast({
