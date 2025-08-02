@@ -1,15 +1,29 @@
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Mail } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import CometChatWrapper from "@/components/CometChatWrapper";
-import CometChatUI from "@/components/CometChatUI";
+import { CometChatSelector } from "@/CometChatSelector/CometChatSelector";
+import {
+  CometChatMessageComposer,
+  CometChatMessageHeader,
+  CometChatMessageList,
+} from "@cometchat/chat-uikit-react";
+import { CometChat } from "@cometchat/chat-sdk-javascript";
 import { useUserProfile } from "@/contexts/UserProfileContext";
+import '@cometchat/chat-uikit-react/css-variables.css';
 
 const Messages = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { profile, isLoading, isError } = useUserProfile();
+  
+  // State to track the currently selected user
+  const [selectedUser, setSelectedUser] = useState<CometChat.User | undefined>(undefined);
+
+  // State to track the currently selected group
+  const [selectedGroup, setSelectedGroup] = useState<CometChat.Group | undefined>(undefined);
 
   if (isLoading) {
     return (
@@ -69,6 +83,76 @@ const Messages = () => {
     </main>
   );
 
+  // Main messages interface for users with booking history
+  const renderMessagesInterface = () => (
+    <div className="flex h-[calc(100vh-4rem)]">
+                  {/* Left Panel - CometChat Conversation List */}
+            <div className="w-1/3 bg-white border-r border-gray-200">
+              <CometChatSelector
+                key={`selector-${profile?.id || 'unknown'}`}
+                onSelectorItemClicked={(activeItem) => {
+            let item = activeItem;
+
+            // If the selected item is a conversation, extract the user/group from it
+            if (activeItem instanceof CometChat.Conversation) {
+              item = activeItem.getConversationWith();
+            }
+
+            console.log("🔍 Messages - Selected item:", item);
+            console.log("🔍 Messages - Item type:", item?.constructor?.name);
+            console.log("🔍 Messages - Item UID:", (item as any)?.getUid?.());
+
+            // Determine if the selected item is a User or a Group and update the state accordingly
+            if (item instanceof CometChat.User) {
+              setSelectedUser(item as CometChat.User);
+              setSelectedGroup(undefined); // Ensure no group is selected
+              console.log("✅ Messages - User selected:", item.getUid());
+            } else if (item instanceof CometChat.Group) {
+              setSelectedUser(undefined); // Ensure no user is selected
+              setSelectedGroup(item as CometChat.Group);
+              console.log("✅ Messages - Group selected:", item.getGuid());
+            } else {
+              setSelectedUser(undefined);
+              setSelectedGroup(undefined); // Reset if selection is invalid
+              console.log("❌ Messages - Invalid selection");
+            }
+          }}
+        />
+      </div>
+
+      {/* Right Panel - Chat Interface or Placeholder */}
+      {selectedUser || selectedGroup ? (
+        <div className="flex-1 bg-white flex flex-col">
+          {/* Header displaying user/group details */}
+          <CometChatMessageHeader user={selectedUser} group={selectedGroup} />
+          
+          {/* List of messages for the selected user/group */}
+          <CometChatMessageList user={selectedUser} group={selectedGroup} />
+          
+          {/* Message input composer */}
+          <CometChatMessageComposer user={selectedUser} group={selectedGroup} />
+        </div>
+      ) : (
+        // Default message when no conversation is selected
+        <div className="flex-1 bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-24 h-24 border-2 border-gray-300 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Mail className="w-12 h-12 text-gray-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Your messages</h2>
+            <p className="text-gray-600 mb-6">Directly interact with your experts here!</p>
+            <button
+              onClick={() => navigate('/experts')}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Find an expert
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-white">
       <TopBar showSearchBar={true} />
@@ -77,27 +161,13 @@ const Messages = () => {
           userId={profile.id}
           userName={userName}
           userAvatar={user.user_metadata?.avatar_url}
-          onReady={(hasBookingHistory) => console.log("CometChat ready for user:", profile.id, "Has booking history:", hasBookingHistory)}
+          onReady={(hasBookingHistory) => {
+            console.log("CometChat ready for user:", profile.id, "Has booking history:", hasBookingHistory);
+          }}
           onError={(error) => console.error("CometChat error:", error)}
           renderNoHistory={renderWelcomePage}
         >
-          <div className="max-w-4xl mx-auto p-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center space-x-3">
-                  <MessageCircle className="h-6 w-6 text-blue-600" />
-                  <h1 className="text-2xl font-semibold text-gray-900">Messages</h1>
-                </div>
-                <p className="mt-2 text-gray-600">
-                  Connect with experts and manage your conversations
-                </p>
-              </div>
-
-              <div className="p-6">
-                <CometChatUI />
-              </div>
-            </div>
-          </div>
+          {renderMessagesInterface()}
         </CometChatWrapper>
       </main>
     </div>

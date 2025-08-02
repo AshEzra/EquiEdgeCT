@@ -1,25 +1,19 @@
 import { supabase } from "@/integrations/supabase/client";
+import { COMETCHAT_CONFIG, COMETCHAT_FEATURES } from "@/config/cometchat";
 
 /**
- * CometChat Constants - Replace with your actual credentials
- */
-const COMETCHAT_CONSTANTS = {
-  APP_ID: "278833fb48d8c83b", // Replace with your actual App ID from CometChat
-  REGION: "US", // Replace with your App's Region
-  AUTH_KEY: "e7f74dde7fb77f045a008d4b4856aeffea9d24c9", // Replace with your Auth Key (leave blank if using Auth Token)
-};
-
-/**
- * CometChatService - Multi-User Architecture with Direct Messages
+ * CometChatService - Clean Architecture for Multi-User Platform
  * 
- * This service supports multiple concurrent users with direct 1-on-1 conversations
- * between users and experts. Each user gets their own service instance.
+ * This service creates CometChat accounts immediately upon EquiEdge account creation,
+ * providing a seamless chat experience from day one.
  * 
  * Key Features:
- * - Direct messages (1-on-1) instead of groups
+ * - Immediate account creation upon user registration
+ * - Direct messages (1-on-1) between users and experts
  * - Persistent conversations that remain in message list forever
  * - Each user has isolated CometChat session
  * - Conversations created automatically when first message is sent
+ * - Booking-based access control at the conversation level
  * 
  * Usage Examples:
  * 
@@ -40,10 +34,8 @@ const COMETCHAT_CONSTANTS = {
  * // Conversations persist in message list forever
  */
 class CometChatService {
-  // Remove singleton pattern - each user gets their own instance
   private isInitialized = false;
   private isLoggedIn = false;
-  private hasBookingHistory = false;
   private CometChatUIKit: any = null;
   private UIKitSettingsBuilder: any = null;
   private CometChat: any = null;
@@ -52,14 +44,6 @@ class CometChatService {
   constructor() {
     // Each instance is independent
   }
-
-  // Remove getInstance() - create new instances instead
-  // static getInstance(): CometChatService {
-  //   if (!CometChatService.instance) {
-  //     CometChatService.instance = new CometChatService();
-  //   }
-  //   return CometChatService.instance;
-  // }
 
   /**
    * Dynamically import CometChat SDK for SSR compatibility
@@ -80,7 +64,7 @@ class CometChatService {
   }
 
   /**
-   * Initialize CometChat when user has any booking history
+   * Initialize CometChat SDK
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -88,19 +72,18 @@ class CometChatService {
     }
 
     try {
-      // Load CometChat SDK dynamically
       await this.loadCometChatSDK();
 
       const UIKitSettings = new this.UIKitSettingsBuilder()
-        .setAppId(COMETCHAT_CONSTANTS.APP_ID)
-        .setRegion(COMETCHAT_CONSTANTS.REGION)
-        .setAuthKey(COMETCHAT_CONSTANTS.AUTH_KEY)
+        .setAppId(COMETCHAT_CONFIG.APP_ID)
+        .setRegion(COMETCHAT_CONFIG.REGION)
+        .setAuthKey(COMETCHAT_CONFIG.AUTH_KEY)
         .subscribePresenceForAllUsers()
         .build();
 
       await this.CometChatUIKit.init(UIKitSettings);
       this.isInitialized = true;
-      console.log("CometChat UI Kit initialized successfully for user:", this.currentUserId);
+      console.log("CometChat UI Kit initialized successfully");
     } catch (error) {
       console.error("CometChat UI Kit initialization failed:", error);
       throw error;
@@ -108,71 +91,38 @@ class CometChatService {
   }
 
   /**
-   * Create CometChat user and login when first booking is created
+   * Create CometChat user account (called immediately upon EquiEdge account creation)
    */
-  async createUserAndLogin(uid: string, name: string, avatar?: string): Promise<void> {
+  async createUserAccount(uid: string, name: string, avatar?: string): Promise<void> {
     try {
-      // Set current user ID for this instance
-      this.currentUserId = uid;
-      
-      // Initialize CometChat if not already done
+      // Ensure CometChat is fully initialized before creating user
       if (!this.isInitialized) {
         await this.initialize();
       }
 
-      // Logout any existing user first to clear global state
-      if (this.isLoggedIn) {
-        try {
-          await this.CometChatUIKit.logout();
-          console.log("🔄 Logged out previous user to clear state");
-        } catch (logoutError) {
-          console.log("No previous user to logout");
-        }
-        this.isLoggedIn = false;
+      const user = new this.CometChat.User(uid);
+      user.setName(name);
+      if (avatar) {
+        user.setAvatar(avatar);
       }
-
-      // Create user in CometChat first using core SDK
-      try {
-        const user = new this.CometChat.User(uid);
-        user.setName(name);
-        if (avatar) {
-          user.setAvatar(avatar);
-        }
-        
-        await this.CometChat.createUser(user, COMETCHAT_CONSTANTS.AUTH_KEY);
-        console.log("CometChat user created successfully:", { uid, name, avatar });
-      } catch (createError: any) {
-        // If user already exists, that's fine - continue to login
-        if (createError.code === 'ERR_UID_ALREADY_EXISTS' || createError.code === 'ERR_UID_ALREADY_TAKEN') {
-          console.log("User already exists in CometChat, proceeding to login:", uid);
-        } else {
-          console.error("Error creating CometChat user:", createError);
-          throw createError;
-        }
+      
+      await this.CometChat.createUser(user, COMETCHAT_CONFIG.AUTH_KEY);
+      console.log("✅ CometChat user account created:", { uid, name, avatar });
+    } catch (error: any) {
+      // If user already exists, that's fine
+      if (error.code === 'ERR_UID_ALREADY_EXISTS' || error.code === 'ERR_UID_ALREADY_TAKEN') {
+        console.log("User already exists in CometChat:", uid);
+      } else {
+        console.error("Error creating CometChat user:", error);
+        throw error;
       }
-
-      // Login to CometChat
-      await this.CometChatUIKit.login(uid, COMETCHAT_CONSTANTS.AUTH_KEY);
-      this.isLoggedIn = true;
-      this.hasBookingHistory = true;
-      console.log("✅ CometChat user created and logged in:", uid);
-      console.log("🔍 Current user ID set to:", this.currentUserId);
-    } catch (error) {
-      console.error("CometChat user creation/login failed:", error);
-      throw error;
     }
   }
 
   /**
-   * Login user to CometChat (if they have any booking history)
+   * Login user to CometChat (called when user accesses chat features)
    */
   async loginUser(uid: string, name: string, avatar?: string): Promise<void> {
-    if (!this.hasBookingHistory) {
-      console.log("No booking history found, skipping CometChat login");
-      return;
-    }
-
-    // Set current user ID for this instance
     this.currentUserId = uid;
 
     if (!this.isInitialized) {
@@ -180,11 +130,33 @@ class CometChatService {
     }
 
     try {
-      // UI Kit should automatically create user if they don't exist
-      console.log("Attempting to login/create user:", { uid, name, avatar });
-      await this.CometChatUIKit.login(uid, COMETCHAT_CONSTANTS.AUTH_KEY);
-      this.isLoggedIn = true;
-      console.log("CometChat login successful:", uid);
+      // Check if user is already logged in (CometChat recommended pattern)
+      const loggedInUser = await this.CometChatUIKit.getLoggedinUser();
+      
+      if (!loggedInUser) {
+        // No user logged in, proceed with login
+        console.log("No existing session found, logging in user:", { uid, name, avatar });
+        await this.CometChatUIKit.login(uid, COMETCHAT_CONFIG.AUTH_KEY);
+        this.isLoggedIn = true;
+        console.log("✅ CometChat login successful:", uid);
+      } else {
+        // User already logged in, check if it's the same user
+        const currentLoggedInUid = loggedInUser.getUid();
+        console.log("Found existing session for user:", currentLoggedInUid);
+        
+        if (currentLoggedInUid === uid) {
+          // Same user, use existing session
+          this.isLoggedIn = true;
+          console.log("✅ Using existing session for user:", uid);
+        } else {
+          // Different user, logout and login new user
+          console.log("🔄 Different user logged in, switching from", currentLoggedInUid, "to", uid);
+          await this.CometChatUIKit.logout();
+          await this.CometChatUIKit.login(uid, COMETCHAT_CONFIG.AUTH_KEY);
+          this.isLoggedIn = true;
+          console.log("✅ Switched to new user:", uid);
+        }
+      }
     } catch (error) {
       console.error("CometChat login failed:", error);
       throw error;
@@ -273,14 +245,13 @@ class CometChatService {
     }
 
     try {
-      const messageRequest = new this.CometChat.MessagesRequestBuilder()
-        .setUID(this.currentUserId)
+      const conversationRequest = new this.CometChat.ConversationsRequestBuilder()
         .setLimit(50)
         .build();
 
-      const messages = await messageRequest.fetchPrevious();
-      console.log("Direct conversations fetched:", messages.length);
-      return messages;
+      const conversations = await conversationRequest.fetchNext();
+      console.log("Direct conversations fetched:", conversations.length);
+      return conversations;
     } catch (error) {
       console.error("Failed to get direct conversations:", error);
       return [];
@@ -311,9 +282,6 @@ class CometChatService {
         console.log("Booking details:", data[0]);
       }
       
-      // Update the stored state
-      this.hasBookingHistory = hasHistory;
-      
       return hasHistory;
     } catch (error) {
       console.error("Failed to check booking history:", error);
@@ -322,18 +290,10 @@ class CometChatService {
   }
 
   /**
-   * Set booking history status (called when first booking is created)
-   */
-  setBookingHistory(hasHistory: boolean): void {
-    this.hasBookingHistory = hasHistory;
-    console.log("Booking history status set to:", hasHistory, "for user:", this.currentUserId);
-  }
-
-  /**
    * Get unread message count for notifications
    */
   async getUnreadCount(): Promise<number> {
-    if (!this.isLoggedIn || !this.hasBookingHistory) {
+    if (!this.isLoggedIn) {
       return 0;
     }
 
@@ -362,13 +322,6 @@ class CometChatService {
   }
 
   /**
-   * Check if user has booking history
-   */
-  getHasBookingHistory(): boolean {
-    return this.hasBookingHistory;
-  }
-
-  /**
    * Get current user ID for this instance
    */
   getCurrentUserId(): string | null {
@@ -387,6 +340,7 @@ class CometChatService {
           booking_id,
           status,
           created_at,
+          updated_at,
           profiles!conversations_expert_id_fkey (
             id,
             first_name,
@@ -403,14 +357,14 @@ class CometChatService {
           )
         `)
         .eq('user_id', userId)
-        .eq('status', 'active')
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (error) {
         console.error("Error fetching user conversations:", error);
         return [];
       }
 
+      console.log("Fetched conversations for user:", userId, "Count:", data?.length || 0);
       return data || [];
     } catch (error) {
       console.error("Failed to get user conversations:", error);

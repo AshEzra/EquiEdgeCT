@@ -1,5 +1,6 @@
 import { useState, useEffect, ReactNode } from 'react';
 import CometChatService from '@/services/cometchatService';
+import UserRegistrationService from '@/services/userRegistrationService';
 
 interface CometChatWrapperProps {
   children: ReactNode;
@@ -36,25 +37,31 @@ const CometChatWrapper = ({
       try {
         const cometChatService = new CometChatService();
         
-        // Check if user has booking history
+        // Check if user has booking history for UI purposes
         const hasHistory = await cometChatService.checkBookingHistory(userId);
         setHasBookingHistory(hasHistory);
         
-        if (hasHistory) {
-          // Initialize CometChat only if user has booking history
-          await cometChatService.initialize();
-          
-          // Login user to CometChat
-          await cometChatService.loginUser(userId, userName || 'User', userAvatar);
-          
-          setIsReady(true);
-          onReady?.(true);
-          console.log("CometChat initialized and user logged in:", userId);
-        } else {
-          console.log("No booking history found, CometChat not initialized");
-          setIsReady(true);
-          onReady?.(false);
+        // Ensure CometChat account exists (fallback in case registration failed)
+        const userRegistrationService = new UserRegistrationService();
+        await userRegistrationService.ensureCometChatAccount(userId, userName || 'User', userAvatar);
+        
+        // Always initialize CometChat and login user (accounts are created upon registration)
+        await cometChatService.initialize();
+        
+        // Ensure we're logged out of any previous session first
+        try {
+          await cometChatService.logout();
+          console.log("🔄 Logged out previous user session");
+        } catch (logoutError) {
+          console.log("No previous session to logout");
         }
+        
+        // Login user to CometChat (account should already exist from registration)
+        await cometChatService.loginUser(userId, userName || 'User', userAvatar);
+        
+        setIsReady(true);
+        onReady?.(hasHistory);
+        console.log("✅ CometChat initialized and user logged in:", userId, "Has booking history:", hasHistory);
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Failed to initialize CometChat');
         console.error("CometChat initialization error:", error);

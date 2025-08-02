@@ -1,0 +1,10 @@
+/* CometChatSelector.css */
+.cometchat-conversations {
+  height: 100%;
+  width: 100%;
+}
+
+.conversations-wrapper {
+  height: 100%;
+  overflow-y: auto;
+} 

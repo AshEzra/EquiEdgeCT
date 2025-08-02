@@ -282,7 +282,27 @@ const ExpertProfile = () => {
         return;
       }
 
-      // Create CometChat user and login if this is their first booking
+      // Create conversation record in database
+      const { error: conversationError } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: userProfile.id,
+          expert_id: expert.id,
+          booking_id: booking.id,
+          status: 'active'
+        });
+
+      if (conversationError) {
+        console.error('Conversation creation error:', conversationError);
+        toast({
+          title: "Booking Failed",
+          description: "There was an error creating your conversation. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Create conversation and send welcome message (CometChat account already exists from registration)
       if (user) {
         console.log("User profile:", userProfile);
         console.log("User email:", user.email);
@@ -290,10 +310,10 @@ const ExpertProfile = () => {
         console.log("Constructed userName:", userName);
         
         const cometChatService = new CometChatService();
-        await cometChatService.createUserAndLogin(userProfile.id, userName, userProfile.profile_image_url);
         
-        // Set booking history status after user is logged in
-        cometChatService.setBookingHistory(true);
+        // Initialize and login to CometChat (account should already exist from registration)
+        await cometChatService.initialize();
+        await cometChatService.loginUser(userProfile.id, userName, userProfile.profile_image_url);
         
         // Create the conversation between user and expert
         await cometChatService.createConversation(userProfile.id, expert.id, booking.id);
