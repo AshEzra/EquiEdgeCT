@@ -1,0 +1,101 @@
+/* CometChat Input Focus Styles - Remove Blue Outline */
+
+/* Remove focus outline from CometChat message composer */
+.cometchat__message-composer {
+  outline: none !important;
+}
+
+.cometchat__message-composer:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove focus outline from CometChat input elements */
+.cometchat__message-composer input {
+  outline: none !important;
+}
+
+.cometchat__message-composer input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.cometchat__message-composer textarea {
+  outline: none !important;
+}
+
+.cometchat__message-composer textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove focus outline from any CometChat input containers */
+[data-testid="message-composer"] {
+  outline: none !important;
+}
+
+[data-testid="message-composer"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove focus outline from any input elements within CometChat */
+div[class*="cometchat"] input {
+  outline: none !important;
+}
+
+div[class*="cometchat"] input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+div[class*="cometchat"] textarea {
+  outline: none !important;
+}
+
+div[class*="cometchat"] textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove focus outline from any CometChat wrapper elements */
+div[class*="cometchat"][class*="composer"] {
+  outline: none !important;
+}
+
+div[class*="cometchat"][class*="composer"]:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Override any inline styles that might add focus outlines */
+[style*="outline"] {
+  outline: none !important;
+}
+
+/* Remove any border that might appear on focus */
+.cometchat__message-composer *:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Additional selectors for CometChat input styling */
+.cometchat__input {
+  outline: none !important;
+}
+
+.cometchat__input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure no focus styles are applied to any CometChat input elements */
+.cometchat__message-composer * {
+  outline: none !important;
+}
+
+.cometchat__message-composer *:focus {
+  outline: none !important;
+  box-shadow: none !important;
+} 
